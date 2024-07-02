@@ -1,0 +1,228 @@
+// #!/usr/bin/env node
+// require('dotenv').config()
+// require('module-alias/register')
+// const { cleanEnv, str } = require('envalid')
+
+// cleanEnv(process.env, {
+//   DEBUG: str({ default: 'backend:server' }),
+//   NODE_ENV: str({ choices: ['development', 'test', 'production', 'staging'], default: 'development' }),
+//   JWT_SECRET: str({ desc: 'JWT secret key' }),
+//   MONGODB_URI: str({ desc: 'MongoDB connection string' }),
+// })
+
+// /**
+//  * Normalize a port into a number, string, or false.
+//  */
+
+// function normalizePort(val) {
+//   const port = parseInt(val, 10)
+
+//   if (Number.isNaN(port)) {
+//     // named pipe
+//     return val
+//   }
+
+//   if (port >= 0) {
+//     // port number
+//     return port
+//   }
+
+//   return false
+// }
+
+// const port = normalizePort(process.env.PORT || '3000')
+
+// /**
+//  * Module dependencies.
+//  */
+
+// const http = require('http')
+// const debug = require('debug')('backend:server')
+// const app = require('../app')
+
+// /**
+//  * Get port from environment and store in Express.
+//  */
+
+// app.set('port', port)
+
+// /**
+//  * Create HTTP server.
+//  */
+
+// const server = http.createServer(app)
+
+// /**
+//  * Event listener for HTTP server "error" event.
+//  */
+
+// function onError(error) {
+//   if (error.syscall !== 'listen') {
+//     throw error
+//   }
+
+//   const bind = typeof port === 'string' ? `Pipe ${port}` : `Port ${port}`
+
+//   // handle specific listen errors with friendly messages
+//   switch (error.code) {
+//     case 'EACCES': {
+//       console.error(`${bind} requires elevated privileges`)
+//       process.exit(1)
+//     }
+//     // eslint-disable-next-line no-fallthrough
+//     case 'EADDRINUSE': {
+//       console.error(`${bind} is already in use`)
+//       process.exit(1)
+//     }
+//     // eslint-disable-next-line no-fallthrough
+//     default:
+//       throw error
+//   }
+// }
+
+// /**
+//  * Event listener for HTTP server "listening" event.
+//  */
+
+// function onListening() {
+//   const addr = server.address()
+//   const bind = typeof addr === 'string' ? `pipe ${addr}` : `port ${addr.port}`
+//   debug(`Listening on ${bind}`)
+// }
+
+// /**
+//  * Listen on provided port, on all network interfaces.
+//  */
+
+// server.listen(port)
+// server.on('error', onError)
+// server.on('listening', onListening)
+
+let users=[]
+require('dotenv').config()
+require('module-alias/register')
+const { cleanEnv, str } = require('envalid')
+const http = require('http')
+const debug = require('debug')('backend:server')
+const app = require('../app')
+const socketIo = require('socket.io')
+
+cleanEnv(process.env, {
+  DEBUG: str({ default: 'backend:server' }),
+  NODE_ENV: str({ choices: ['development', 'test', 'production', 'staging'], default: 'development' }),
+  JWT_SECRET: str({ desc: 'JWT secret key' }),
+  MONGODB_URI: str({ desc: 'MongoDB connection string' }),
+})
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+function normalizePort(val) {
+  const port = parseInt(val, 10)
+  if (Number.isNaN(port)) {
+    // named pipe
+    return val
+  }
+  if (port >= 0) {
+    // port number
+    return port
+  }
+  return false
+}
+
+const port = normalizePort(process.env.PORT || '3000')
+
+/**
+ * Module dependencies.
+ */
+
+/**
+ * Get port from environment and store in Express.
+ */
+app.set('port', port)
+
+/**
+ * Create HTTP server.
+ */
+const server = http.createServer(app)
+
+/**
+ * Integrate Socket.io
+ */
+const io = socketIo(server, {
+  cors: {
+    origin: "*", // Allow all origins for development
+    methods: ["GET", "POST"]
+  }
+})
+
+io.on('connection', (socket) => {
+  console.log('a user conncected')
+socket.on('connected',(data)=>{
+  let finaldata={
+    ...data,
+    socketId:socket.id
+  }
+users.push(finaldata)
+})
+  // Handle incoming messages
+  socket.on('message', (msg) => {
+console.log(msg)
+if(msg.sender=="user"){
+  let admins=users.filter(u=>u?.sender=="admin")
+  admins.map((val,i)=>{
+    io.to(val?.socketId).emit('message',msg)
+  })
+}
+    // io.emit('message', msg) // Broadcast to all clients
+  })
+
+  // Handle disconnect
+  socket.on('disconnect', () => {
+    users=users.filter(u=>u?.socketId!=socket.id)
+    console.log('user disconnected')
+  })
+})
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error
+  }
+
+  const bind = typeof port === 'string' ? `Pipe ${port}` : `Port ${port}`
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES': {
+      console.error(`${bind} requires elevated privileges`)
+      process.exit(1)
+    }
+    // eslint-disable-next-line no-fallthrough
+    case 'EADDRINUSE': {
+      console.error(`${bind} is already in use`)
+      process.exit(1)
+    }
+    // eslint-disable-next-line no-fallthrough
+    default:
+      throw error
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+function onListening() {
+  const addr = server.address()
+  const bind = typeof addr === 'string' ? `pipe ${addr}` : `port ${addr.port}`
+  debug(`Listening on ${bind}`)
+}
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+server.listen(port)
+server.on('error', onError)
+server.on('listening', onListening)
